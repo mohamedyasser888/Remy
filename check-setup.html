@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Setup Checker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #718096;
+            margin-bottom: 30px;
+        }
+        .check-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            background: #f7fafc;
+            border-left: 4px solid #e2e8f0;
+        }
+        .check-item.loading {
+            border-left-color: #ecc94b;
+        }
+        .check-item.success {
+            border-left-color: #48bb78;
+            background: #f0fff4;
+        }
+        .check-item.error {
+            border-left-color: #f56565;
+            background: #fff5f5;
+        }
+        .icon {
+            font-size: 24px;
+            margin-right: 15px;
+            min-width: 30px;
+        }
+        .details {
+            flex: 1;
+        }
+        .label {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+        .message {
+            font-size: 14px;
+            color: #718096;
+        }
+        .error-msg {
+            color: #c53030;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .sql-box {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        .copy-btn {
+            float: right;
+            background: #48bb78;
+            padding: 6px 12px;
+            font-size: 12px;
+            margin-top: -10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Setup Checker</h1>
+        <p class="subtitle">Verifying your Supabase configuration...</p>
+
+        <div id="checks"></div>
+
+        <button id="runBtn" onclick="runChecks()">Run Checks</button>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://lpemedejeckfkcykulvg.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwZW1lZGVqZWNrZmtjeWt1bHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzODkyMDUsImV4cCI6MjEwNjk2NTIwNX0.UmVkRxWOK773Ij4Hslwl01gMNSX3HzBeKAN9J4J2NbQ';
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const checks = [
+            { id: 'connection', label: 'Supabase Connection', test: testConnection },
+            { id: 'profiles', label: 'Profiles Table', test: () => testTable('profiles') },
+            { id: 'wardrobe', label: 'Wardrobe Items Table', test: () => testTable('wardrobe_items') },
+            { id: 'posts', label: 'Posts Table', test: () => testTable('posts') },
+            { id: 'likes', label: 'Post Likes Table', test: () => testTable('post_likes') },
+            { id: 'storage', label: 'Storage Bucket (clothes)', test: testStorage },
+        ];
+
+        // Add timeout wrapper
+        async function withTimeout(promise, timeoutMs = 5000) {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timeout - check your connection or database setup')), timeoutMs)
+                )
+            ]);
+        }
+
+        async function testConnection() {
+            const { error } = await withTimeout(
+                supabase.from('profiles').select('count').limit(0)
+            );
+            if (error) throw new Error(error.message);
+            return 'Connected successfully';
+        }
+
+        async function testTable(tableName) {
+            const { error } = await withTimeout(
+                supabase.from(tableName).select('count').limit(0)
+            );
+            if (error) throw new Error(`Table not found: ${error.message}`);
+            return 'Table exists';
+        }
+
+        async function testStorage() {
+            const { data, error } = await withTimeout(
+                supabase.storage.listBuckets()
+            );
+            if (error) throw new Error(error.message);
+            const clothesBucket = data.find(b => b.name === 'clothes');
+            if (!clothesBucket) throw new Error('Bucket "clothes" not found');
+            if (!clothesBucket.public) throw new Error('Bucket is not public');
+            return 'Bucket exists and is public';
+        }
+
+        function updateCheckUI(id, status, message) {
+            const el = document.getElementById(id);
+            el.className = `check-item ${status}`;
+            const icon = status === 'loading' ? '⏳' : status === 'success' ? '✅' : '❌';
+            el.querySelector('.icon').textContent = icon;
+            el.querySelector('.message').textContent = message;
+            el.querySelector('.message').className = status === 'error' ? 'message error-msg' : 'message';
+        }
+
+        async function runChecks() {
+            const btn = document.getElementById('runBtn');
+            btn.disabled = true;
+            btn.textContent = 'Running checks...';
+
+            for (const check of checks) {
+                updateCheckUI(check.id, 'loading', 'Testing...');
+                
+                try {
+                    const result = await check.test();
+                    updateCheckUI(check.id, 'success', result);
+                } catch (error) {
+                    updateCheckUI(check.id, 'error', error.message);
+                }
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Run Checks Again';
+        }
+
+        // Initialize UI
+        function initUI() {
+            const container = document.getElementById('checks');
+            checks.forEach(check => {
+                container.innerHTML += `
+                    <div id="${check.id}" class="check-item">
+                        <div class="icon">⚪</div>
+                        <div class="details">
+                            <div class="label">${check.label}</div>
+                            <div class="message">Not tested yet</div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        initUI();
+        // Auto-run on load
+        setTimeout(runChecks, 500);
+    </script>
+</body>
+</html>
